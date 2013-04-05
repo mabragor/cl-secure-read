@@ -46,64 +46,95 @@ If NIL, nothing is enabled. Defaults to enabling construction of arbitrary conse
 			   (:perks ,@perks))))))
 
 
-(defmacro! define-safe-reader (safe-name
+(defmacro! with-locked-readtable ((name readtable blacklist whitelist) &body body)
+  "Parse black and whitelists, lock the readtable, then pass control to the body.
+Binds RT to tightened readtable, BLACKLIST and WHITELIST to parsed black- and white-list, respectively.
+NAME is the name of a function, which is used in the error report."
+  `(let* ((rt (copy-readtable (find-readtable ,readtable)))
+	  (blacklist (aif ,blacklist
+			  (expand-white-black-list ,e!-it)
+			  (analyze-readtable-chars rt)))
+	  (whitelist (expand-white-black-list ,whitelist)))
+     (let ((,g!-errfun-name (lambda (stream close-char)
+			      (declare (ignore stream close-char))
+			      (error ,(strcat (string name) " failure")))))
+       ;; Disable ordinary macro-chars
+       (let ((black-macro-chars (cdr (assoc :macro-chars blacklist)))
+	     (white-macro-chars (cdr (assoc :macro-chars whitelist))))
+	 (dolist (c black-macro-chars)
+	   (if (not (find c white-macro-chars :test #'char=))
+	       (set-macro-character c ,g!-errfun-name nil rt))))
+
+       ;; Disable dispatching macro-chars
+       (let ((black-dispatching-chars (cdr (assoc :dispatch-macro-chars blacklist)))
+	     (white-dispatching-chars (cdr (assoc :dispatch-macro-chars whitelist))))
+	 (iter (for (char . sub-chars) in black-dispatching-chars)
+	       (let ((wh-sub-chars (cdr (find char white-dispatching-chars :test #'char= :key #'car))))
+		 (iter (for sub-char in sub-chars)
+		       (if (not (find sub-char wh-sub-chars :test #'char=))
+			   (set-dispatch-macro-character char sub-char ,g!-errfun-name rt))))))
+
+       ,@body)))
+
+(defmacro! define-secure-read-from-string (safe-name
 			       &key
 			       (readtable :standard)
 			       (blacklist 'safe-read-from-string-blacklist)
-			       (whitelist 'safe-read-from-string-whitelist))
+			       (whitelist 'safe-read-from-string-whitelist)
+			       fail-value)
   "Define a safer version of READ-FROM-STRING.
 READTABLE is a name of a readtable, on base of which to build a 'locked' version of a readtable.
 BLACKLIST is a list of macrocharacters and dispatching macro-characters not to allow.
 WHITELIST is a list of macrocharacters and dispatching macro-characters to allow."
-  (let ((errfun-name (intern (strcat safe-name "-ERROR"))))
-    `(let* ((rt (copy-readtable (find-readtable ,readtable)))
-	    (blacklist (aif ,blacklist
-			    (expand-white-black-list ,e!-it)
-			    (analyze-readtable-chars rt)))
-	    (whitelist (expand-white-black-list ,whitelist)))
-       (defun ,errfun-name (stream close-char)
-	   (declare (ignore stream close-char))
-	 (error ,(strcat (string safe-name) " failure")))
+  `(with-locked-readtable (,safe-name ,readtable ,blacklist ,whitelist)
+     (let ((read-eval (find :allow-read-eval (cdr (assoc :perks whitelist))))
+	   (io-syntax (find :keep-io-syntax (cdr (assoc :perks whitelist)))))
+       ;; (format t "read-eval: ~a~%" read-eval)
+       (defun ,safe-name (string &optional (eof-error-p t) eof-value &key (start 0) end preserve-whitespace)
+	 (if (stringp string)
+	     (macrolet ((frob ()
+			  `(let ((*readtable* rt))
+			     (let ((*read-eval* (if read-eval *read-eval*)))
+			       ;; (format t "*read-eval*: ~a~%" *read-eval*)
+			       (handler-bind
+			       	   ((error (lambda (condition)
+			       		     (declare (ignore condition))
+			       		     (return-from
+			       		      ,',safe-name ,',fail-value))))
+				 (read-from-string string eof-error-p eof-value
+						   :start start :end end :preserve-whitespace preserve-whitespace))))))
+	       (if io-syntax
+		   (frob)
+		   (with-standard-io-syntax
+		     (frob))))
+	     ,fail-value)))))
 
-       ;; (format t "~a~%" blacklist)
-       ;; (format t "~a~%" whitelist)
-
-       ;; Disable ordinary macro-chars
-       (let ((black-macro-chars (cdr (assoc :macro-chars blacklist)))
-       	     (white-macro-chars (cdr (assoc :macro-chars whitelist))))
-	 ;; (format t "~a~%" black-macro-chars)
-	 ;; (format t "~a~%" white-macro-chars)
-       	 (dolist (c black-macro-chars)
-       	   (if (not (find c white-macro-chars :test #'char=))
-       	       (set-macro-character c #',errfun-name nil rt))))
-
-       ;; Disable dispatching macro-chars
-       (let ((black-dispatching-chars (cdr (assoc :dispatch-macro-chars blacklist)))
-       	     (white-dispatching-chars (cdr (assoc :dispatch-macro-chars whitelist))))
-       	 (iter (for (char . sub-chars) in black-dispatching-chars)
-       	       (let ((wh-sub-chars (cdr (find char white-dispatching-chars :test #'char= :key #'car))))
-       		 (iter (for sub-char in sub-chars)
-       		       (if (not (find sub-char wh-sub-chars :test #'char=))
-       			   (set-dispatch-macro-character char sub-char #',errfun-name rt))))))
-
-       (let ((read-eval (find :allow-read-eval (cdr (assoc :perks whitelist))))
-	     (io-syntax (find :keep-io-syntax (cdr (assoc :perks whitelist)))))
-	 (format t "read-eval: ~a~%" read-eval)
-	 (defun ,safe-name (s &optional fail)
-	   (if (stringp s)
-	       (macrolet ((frob ()
-			    `(let ((*readtable* rt))
-			       (let ((*read-eval* (if read-eval *read-eval*)))
-				 (format t "*read-eval*: ~a~%" *read-eval*)
-				 (handler-bind
-				     ((error (lambda (condition)
-					       (declare (ignore condition))
-					       (return-from
-						,',safe-name fail))))
-				   (read-from-string s))))))
-		 (if io-syntax
-		     (frob)
-		     (with-standard-io-syntax
-		       (frob))))
-	       fail))))))
-
+(defmacro! define-secure-read (safe-name
+			       &key
+			       (readtable :standard)
+			       (blacklist 'safe-read-from-string-blacklist)
+			       (whitelist 'safe-read-from-string-whitelist)
+			       preserving-whitespace
+			       fail-value)
+  `(with-locked-readtable (,safe-name ,readtable ,blacklist ,whitelist)
+     (let ((read-eval (find :allow-read-eval (cdr (assoc :perks whitelist))))
+	   (io-syntax (find :keep-io-syntax (cdr (assoc :perks whitelist)))))
+       ;; (format t "read-eval: ~a~%" read-eval)
+       (defun ,safe-name (&optional (stream *standard-input*) (eof-error-p t) eof-value recursive-p)
+	 (macrolet ((frob ()
+		      `(let ((*readtable* rt))
+			 (let ((*read-eval* (if read-eval *read-eval*)))
+			   ;; (format t "*read-eval*: ~a~%" *read-eval*)
+			   (handler-bind
+			       ((error (lambda (condition)
+			   		 (declare (ignore condition))
+			   		 (return-from
+			   		  ,',safe-name ,',fail-value))))
+			     (,',(if preserving-whitespace
+				     'read-preserving-whitespace
+				     'read)
+				 stream eof-error-p eof-value recursive-p))))))
+	   (if io-syntax
+	       (frob)
+	       (with-standard-io-syntax
+		 (frob))))))))

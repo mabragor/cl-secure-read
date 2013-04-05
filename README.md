@@ -2,10 +2,12 @@ cl-secure-read
 ==============
 
 Securing a reader in spirit of Let Over Lambda. See section "Reader Security" on www.letoverlambda.com
-to get the idea.
+to get the initial idea.
 
-Exports a macro DEFINE-SAFE-READER, which allows to define a function, which is exactly as
-READ-FROM-STRING, but in which only some macro-characters and dispatch-macro-characters are enabled.
+Exports 2 macros: DEFINE-SECURE-READ-FROM-STRING and DEFINE-SECURE-READ,
+ which allow to define a function, which is exactly as
+READ-FROM-STRING and READ or READ-PRESERVING-WHITESPACE,
+ but in which only some macro-characters and dispatch-macro-characters are enabled.
 
 Default behaviour is to take a standard readtable, force STANDARD-IO-SYNTAX, disable *READ-EVAL*,
 and disable all macro-characters except #\' #\, #\( and #\`.
@@ -18,8 +20,15 @@ binds SAFE-READ-FROM-STRING-WHITELIST and SAFE-READ-FROM-STRING-BLACKLIST.
 
 The syntax of these bindings is best shown by an example
 
+        ;; Define tightened-up version of READ-FROM-STRING ...
         (let ((safe-read-from-string-whitelist '(#\; #\! (#\# #\.) :allow-read-eval :keep-io-syntax)))
-          (define-safe-reader not-so-strict-read-from-string :readtable :clesh))
+          (define-secure-read-from-string not-so-strict-read-from-string :readtable :clesh :fail-value "caboom!"))
+
+        ;; ... and later use it in couple different ways
+        (not-so-strict-read-from-string "asdf") ; this will read-in symbol ASDF
+        (not-so-strict-read-from-string "#(1 2 3)") ; and this will result in "caboom!"
+        (let (*read-eval)
+          (not-so-strict-read-from-string "#.(1 2 3)")) ; "caboom!", disabling *READ-EVAL* dynamically
 
 In this example, the :clesh-readtable is used a basis of a restricted readtable.
 In the input, single-line comments are allowed, read-eval is not explicitly set to nil (:ALLOW-READ-EVAL),
