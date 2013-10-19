@@ -12,20 +12,21 @@ CL-USER> (in-package cl-secure-read)
 ;; Define a function DEFAULT-RFS, which is a restricted version of READ-FROM-STRING
 CL-SECURE-READ> (define-secure-read-from-string default-rfs :fail-value "caboom!")
 CL-SECURE-READ> (default-rfs "123") ; this will read in number 123, as expected ...
-;; ... and this will hopefully just return "caboom!", not executing the removal shell-command.
+;; ... and this will hopefully just return "caboom!",
+;; not executing the removal shell-command.
 CL-SECURE-READ> (default-rfs "#.(shell-eval \"rm -rf ./\"")
 ```
 
 Now exports 4 macro:
 
-    *  DEFINE-SECURE-READ-FROM-STRING - defines a function, which acts exactly like READ-FROM-STRING,
-       only some macro-characters and dispatch-macro-characters (such as read-eval sequence #.) are disabled.
-    *  DEFINE-SECURE-READ - same for READ or READ-PRESERVING-WHITESPACE
-    *  SECURE-READ-FROM-STRING-LAMBDA - do not define READ-FROM-STRING-like function globally, but
-       return a lambda instead
-    *  SECURE-READ-LAMBDA - same for READ and READ-PRESERVING-WHITESPACE
+  *  DEFINE-SECURE-READ-FROM-STRING - defines a function, which acts exactly like READ-FROM-STRING,
+     only some macro-characters and dispatch-macro-characters (such as read-eval sequence #.) are disabled.
+  *  DEFINE-SECURE-READ - same for READ or READ-PRESERVING-WHITESPACE
+  *  SECURE-READ-FROM-STRING-LAMBDA - do not define READ-FROM-STRING-like function globally, but
+     return a lambda instead
+  *  SECURE-READ-LAMBDA - same for READ and READ-PRESERVING-WHITESPACE
 
-Default behaviour is to take a standard readtable, force STANDARD-IO-SYNTAX, disable *READ-EVAL*,
+Default behaviour is to take a standard readtable, force STANDARD-IO-SYNTAX, disable \*READ-EVAL\*,
 and disable all macro-characters except #\' #\, #\( and #\`.
 
 Another readtable may be used instead of standard one by specifying :READTABLE keyword to DEFINE-SAFE-READER.
