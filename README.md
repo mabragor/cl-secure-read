@@ -28,13 +28,19 @@ Now exports 4 macro:
 
 Here are some notable parameters to macro, which control the behavior of resulting restricted reader:
 
-  *  :READTABLE keyword, which allows you to specify, which readtable should your restricted reader-function use
+  *  :READTABLE keyword, which allows you to specify, which readtable should your restricted reader-function use.
+     Default is to take standard readtable.
   *  :BLACKLIST/:WHITELIST keywords, which specify, what macro-characters should be disabled/enabled.
 
      ```lisp
      ;; In this function read-eval is enabled, as well as comments
-     (define-secure-read-from-string my-rfs :whitelist '(#\; (#\# #\.) :allow-read-eval))
+     (define-secure-read-from-string my-rfs :whitelist (#\; (#\# #\.) :allow-read-eval))
      ```
+     Note, that black/white-list may contain sublists and keywords. Meaning of these will be explained below.
+
+     Default black/white-list pair forces standard-io-syntax, disabled read-eval and
+     disables all macro-characters except #\' #\, #\( and #\`
+     (thus allowing only special syntax for construction of lists).
 
   *  SAFE-READ-FROM-STRING-WHITELIST and SAFE-READ-FROM-STRING-BLACKLIST variables can be used instead
      to specify whitelist and blacklist, by wrapping call to macro in LET.
@@ -45,36 +51,32 @@ Here are some notable parameters to macro, which control the behavior of resulti
        (define-secure-read-from-string my-rfs))
      ```
 
-Default behaviour is to take a standard readtable, force STANDARD-IO-SYNTAX, disable \*READ-EVAL\*,
-and disable all macro-characters except #\' #\, #\( and #\` (thus allow only special syntax for construction
-of lists).
+  *  :FAIL-VALUE is used to specify, what to return, when input contains disabled characters,
+     default is to return NIL
 
-The syntax of these bindings is best shown by an example
+Here is a full-fledged example, using most of the described features
 
-        ;; Define tightened-up version of READ-FROM-STRING ...
-        (let ((safe-read-from-string-whitelist '(#\; #\! (#\# #\.) :allow-read-eval :keep-io-syntax)))
-                  (define-secure-read-from-string not-so-strict-read-from-string :readtable :clesh :fail-value "caboom!"))
+```lisp
+;; use readtable :clesh, allow comments, special clesh bang-syntax, allow read-eval,
+;; do not force standard-io-syntax, in case of failure return string "caboom!"
+(let ((safe-read-from-string-whitelist '(#\; #\! (#\# #\.) :allow-read-eval :keep-io-syntax)))
+  (define-secure-read-from-string not-so-strict-read-from-string :readtable :clesh :fail-value "caboom!"))
 
-        ;; ... and later use it in couple different ways
-        (not-so-strict-read-from-string "asdf") ; this will read-in symbol ASDF
-        (not-so-strict-read-from-string "#(1 2 3)") ; and this will result in "caboom!"
-        (let (*read-eval)
-          (not-so-strict-read-from-string "#.(1 2 3)")) ; "caboom!", disabling *READ-EVAL* dynamically
+(not-so-strict-read-from-string "asdf") ; this will read-in symbol ASDF
+(not-so-strict-read-from-string "#(1 2 3)") ; and this will return "caboom!"
+;; since we've requested not to force io-syntax, we may control read-eval dynamically.
+;; Here returns "caboom!", even though *READ-EVAL* was enabled in the definition
+(let (*read-eval*)
+  (not-so-strict-read-from-string "#.(1 2 3)"))
+```
 
-In this example, the :clesh-readtable is used a basis of a restricted readtable.
-In the input, single-line comments are allowed, read-eval is not explicitly set to nil (:ALLOW-READ-EVAL),
-io-syntax is not set to standard one (:KEEP-IO-SYNTAX), which means, that you can control, for example,
-whether *READ-EVAL* is actually turned on in NOT-SO-STRICT-READ-FROM-STRING by
-wrapping a call to it into (LET ((*READ-EVAL* ...)), that is at runtime.
+Syntax of black/white-lists
+---------------------------
 
-Note, how #\. dispatching macro-character, defining read-eval syntax, is enabled by specifying
-a list '(#\# #\.). In general, if white/blacklist contains a sublist, its first character
-is interpreted as a "main" dispatching character (like #\#), while other characters are interpreted
-as dispatch-macro-chars to allow/deny, that correspond to this "main" char.
+Black/white list may contain:
 
-Black/white-list can contain:
-  * characters, which a interpreted as macro-characters to deny/allow
-  * lists of characters, which a interpreted as (macro-char ,@sub-macro-chars), where
+  * characters, which are interpreted as macro-characters to deny/allow
+  * lists of characters, which are interpreted as (macro-char ,@sub-macro-chars), where
     sub-macro-chars is a list of dispatch-macro-chars to deny/allow, which correspond to the given macro-char
     (usually #\#)
   * special keywords, which for now are the following
@@ -84,6 +86,9 @@ Black/white-list can contain:
     :quotes - allow/deny #\` #\' and #\,
     All other keywords are ignored.
    
-
 If BLACKLIST is NIL, all the macro-characters and dispatching macro-characters of the readtable
-are disabled, unless they are specified in the WHITELIST.
+are disabled, unless they are explicitly enabled in the WHITELIST.
+To actually enable all the macrocharacters in the readtable, use something like
+```lisp
+:BLACKLIST (:t)
+```
