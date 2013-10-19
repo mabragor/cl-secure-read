@@ -26,20 +26,34 @@ Now exports 4 macro:
      return a lambda instead
   *  SECURE-READ-LAMBDA - same for READ and READ-PRESERVING-WHITESPACE
 
+Here are some notable parameters to macro, which control the behavior of resulting restricted reader:
+
+  *  :READTABLE keyword, which allows you to specify, which readtable should your restricted reader-function use
+  *  :BLACKLIST/:WHITELIST keywords, which specify, what macro-characters should be disabled/enabled.
+
+     ```lisp
+     ;; In this function read-eval is enabled, as well as comments
+     (define-secure-read-from-string my-rfs :whitelist '(#\; (#\# #\.) :allow-read-eval))
+     ```
+
+  *  SAFE-READ-FROM-STRING-WHITELIST and SAFE-READ-FROM-STRING-BLACKLIST variables can be used instead
+     to specify whitelist and blacklist, by wrapping call to macro in LET.
+
+     ```lisp
+     ;; Same behavior, as in the previous example
+     (let ((safe-read-from-string-whitelist '(#\; (#\# #\.) :allow-read-eval)))
+       (define-secure-read-from-string my-rfs))
+     ```
+
 Default behaviour is to take a standard readtable, force STANDARD-IO-SYNTAX, disable \*READ-EVAL\*,
-and disable all macro-characters except #\' #\, #\( and #\`.
-
-Another readtable may be used instead of standard one by specifying :READTABLE keyword to DEFINE-SAFE-READER.
-
-What macro-characters are enabled/disabled may be controlled by either specifying :BLACKLIST and :WHITELIST
-parameters of a macro explicitly, or by wrapping DEFINE-SAFE-READER form in let, which
-binds SAFE-READ-FROM-STRING-WHITELIST and SAFE-READ-FROM-STRING-BLACKLIST.
+and disable all macro-characters except #\' #\, #\( and #\` (thus allow only special syntax for construction
+of lists).
 
 The syntax of these bindings is best shown by an example
 
         ;; Define tightened-up version of READ-FROM-STRING ...
         (let ((safe-read-from-string-whitelist '(#\; #\! (#\# #\.) :allow-read-eval :keep-io-syntax)))
-          (define-secure-read-from-string not-so-strict-read-from-string :readtable :clesh :fail-value "caboom!"))
+                  (define-secure-read-from-string not-so-strict-read-from-string :readtable :clesh :fail-value "caboom!"))
 
         ;; ... and later use it in couple different ways
         (not-so-strict-read-from-string "asdf") ; this will read-in symbol ASDF
