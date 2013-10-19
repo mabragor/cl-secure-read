@@ -76,12 +76,12 @@ NAME is the name of a function, which is used in the error report."
 
        ,@body)))
 
-(defmacro! define-secure-read-from-string (safe-name
-			       &key
-			       (readtable :standard)
-			       (blacklist 'safe-read-from-string-blacklist)
-			       (whitelist 'safe-read-from-string-whitelist)
-			       fail-value)
+(defmacro! secure-read-from-string-lambda (safe-name
+                                           &key
+                                           (readtable :standard)
+                                           (blacklist 'safe-read-from-string-blacklist)
+                                           (whitelist 'safe-read-from-string-whitelist)
+                                           fail-value)
   "Define a safer version of READ-FROM-STRING.
 READTABLE is a name of a readtable, on base of which to build a 'locked' version of a readtable.
 BLACKLIST is a list of macrocharacters and dispatching macro-characters not to allow.
@@ -90,7 +90,8 @@ WHITELIST is a list of macrocharacters and dispatching macro-characters to allow
      (let ((read-eval (find :allow-read-eval (cdr (assoc :perks whitelist))))
 	   (io-syntax (find :keep-io-syntax (cdr (assoc :perks whitelist)))))
        ;; (format t "read-eval: ~a~%" read-eval)
-       (defun ,safe-name (string &optional (eof-error-p t) eof-value &key (start 0) end preserve-whitespace)
+       (named-lambda ,safe-name
+           (string &optional (eof-error-p t) eof-value &key (start 0) end preserve-whitespace)
 	 (if (stringp string)
 	     (macrolet ((frob ()
 			  `(let ((*readtable* rt))
@@ -99,8 +100,7 @@ WHITELIST is a list of macrocharacters and dispatching macro-characters to allow
 			       (handler-bind
 			       	   ((error (lambda (condition)
 			       		     (declare (ignore condition))
-			       		     (return-from
-			       		      ,',safe-name ,',fail-value))))
+			       		     (return-from ,',safe-name ,',fail-value))))
 				 (read-from-string string eof-error-p eof-value
 						   :start start :end end :preserve-whitespace preserve-whitespace))))))
 	       (if io-syntax
@@ -109,7 +109,22 @@ WHITELIST is a list of macrocharacters and dispatching macro-characters to allow
 		     (frob))))
 	     ,fail-value)))))
 
-(defmacro! define-secure-read (safe-name
+(defmacro! define-secure-read-from-string (safe-name
+                                           &key
+                                           (readtable :standard)
+                                           (blacklist 'safe-read-from-string-blacklist)
+                                           (whitelist 'safe-read-from-string-whitelist)
+                                           fail-value)
+  `(let ((,g!-my-lambda (secure-read-from-string-lambda ,safe-name
+                                                        :readtable ,readtable
+                                                        :blacklist ,blacklist
+                                                        :whitelist ,whitelist
+                                                        :fail-value ,fail-value)))
+     (defun ,safe-name (string &optional (eof-error-p t) eof-value &key (start 0) end preserve-whitespace)
+       (funcall ,g!-my-lambda string eof-error-p eof-value
+                :start start :end end :preserve-whitespace preserve-whitespace))))
+
+(defmacro! secure-read-lambda (safe-name
 			       &key
 			       (readtable :standard)
 			       (blacklist 'safe-read-from-string-blacklist)
@@ -120,7 +135,7 @@ WHITELIST is a list of macrocharacters and dispatching macro-characters to allow
      (let ((read-eval (find :allow-read-eval (cdr (assoc :perks whitelist))))
 	   (io-syntax (find :keep-io-syntax (cdr (assoc :perks whitelist)))))
        ;; (format t "read-eval: ~a~%" read-eval)
-       (defun ,safe-name (&optional (stream *standard-input*) (eof-error-p t) eof-value recursive-p)
+       (named-lambda ,safe-name (&optional (stream *standard-input*) (eof-error-p t) eof-value recursive-p)
 	 (macrolet ((frob ()
 		      `(let ((*readtable* rt))
 			 (let ((*read-eval* (if read-eval *read-eval*)))
@@ -138,3 +153,19 @@ WHITELIST is a list of macrocharacters and dispatching macro-characters to allow
 	       (frob)
 	       (with-standard-io-syntax
 		 (frob))))))))
+
+(defmacro! define-secure-read (safe-name
+                               &key
+                               (readtable :standard)
+                               (blacklist 'safe-read-from-string-blacklist)
+                               (whitelist 'safe-read-from-string-whitelist)
+                               preserving-whitespace
+                               fail-value)
+  `(let ((,g!-my-lambda (secure-read-lambda ,safe-name
+                                            :readtable ,readtable
+                                            :blacklist ,blacklist
+                                            :whitelist ,whitelist
+                                            :preserving-whitespace ,preserving-whitespace
+                                            :fail-value ,fail-value)))
+     (defun ,safe-name (&optional (stream *standard-input*) (eof-error-p t) eof-value recursive-p)
+       (funcall ,g!-my-lambda stream eof-error-p eof-value recursive-p))))
