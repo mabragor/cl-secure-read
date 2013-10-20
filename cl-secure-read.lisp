@@ -8,9 +8,9 @@
 (defvar safe-read-from-string-blacklist nil
   "Macro characters to disable in a readtable. If NIL, disable all macrocharacters there are.")
 
-(defvar safe-read-from-string-whitelist '(:lists :quotes)
+(defvar safe-read-from-string-whitelist '(:lists :quotes #\")
   "Macro characters and features to enable in a readtable.
-If NIL, nothing is enabled. Defaults to enabling construction of arbitrary conses.")
+If NIL, nothing is enabled. Defaults to enabling construction of arbitrary conses and strings.")
 
 (defun analyze-readtable-chars (&optional (readtable *readtable*))
   "Figure out, what characters in readtable are macro, and what are dispatch-macro."
@@ -31,19 +31,29 @@ If NIL, nothing is enabled. Defaults to enabling construction of arbitrary conse
 			  (collect char into macro-chars))))))
 	  (finally (return `((:macro-chars ,@macro-chars) (:dispatch-macro-chars ,@dispatch-macro-chars)))))))
     
+(defun hash->assoc (hash)
+  (iter (for (key val) in-hashtable hash)
+        (collect `(,key . ,val))))
+
 (defun expand-white-black-list (lst)
   "Expand keyword abbreviations, found in a whitelist."
-  (iter (for elt in lst)
-	(cond ((characterp elt) (collect elt into macro-chars))
-	      ((and (consp elt) (characterp (car elt))) (collect elt into dispatch-macro-chars))
-	      ((keywordp elt) (case elt
-				(:lists (appending '(#\( #\)) into macro-chars))
-				(:quotes (appending '(#\' #\` #\,) into macro-chars))
-				(t (collect elt into perks))))
-	      (t (error "Unexpected element of whitelist: ~a" elt)))
-	(finally (return `((:macro-chars ,@macro-chars)
-			   (:dispatch-macro-chars ,@dispatch-macro-chars)
-			   (:perks ,@perks))))))
+  (let ((dispatch-macro-hash (make-hash-table :test #'equal)))
+    (flet ((push-dispatch-macro (elt)
+             (setf (gethash (car elt) dispatch-macro-hash)
+                   (append (cdr elt) (gethash (car elt) dispatch-macro-hash nil)))))
+      (iter (for elt in lst)
+            (cond ((characterp elt) (collect elt into macro-chars))
+                  ((and (consp elt) (characterp (car elt))) (push-dispatch-macro elt))
+                  ((keywordp elt) (case elt
+                                    (:lists (appending '(#\( #\)) into macro-chars))
+                                    (:quotes (appending '(#\' #\` #\,) into macro-chars))
+                                    (:allow-read-eval (push-dispatch-macro '(#\# #\.))
+                                                      (collect elt into perks))
+                                    (t (collect elt into perks))))
+                  (t (error "Unexpected element of whitelist: ~a" elt)))
+            (finally (return `((:macro-chars ,@macro-chars)
+                               (:dispatch-macro-chars ,@(hash->assoc dispatch-macro-hash))
+                               (:perks ,@perks))))))))
 
 
 (defmacro! with-locked-readtable ((name readtable blacklist whitelist) &body body)
