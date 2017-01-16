@@ -56,37 +56,39 @@ If NIL, nothing is enabled. Defaults to enabling construction of arbitrary conse
                                (:perks ,@perks))))))))
 
 
-(defmacro! with-locked-readtable ((name readtable blacklist whitelist) &body body)
+(defmacro with-locked-readtable ((name readtable blacklist whitelist) &body body)
   "Parse black and whitelists, lock the readtable, then pass control to the body.
 Binds RT to tightened readtable, BLACKLIST and WHITELIST to parsed black- and white-list, respectively.
 NAME is the name of a function, which is used in the error report."
-  `(let* ((rt (copy-readtable (find-readtable ,readtable)))
-	  (blacklist (aif ,blacklist
-			  (expand-white-black-list ,e!-it)
-			  (analyze-readtable-chars rt)))
-	  (whitelist (expand-white-black-list ,whitelist)))
-     (let ((,g!-errfun-name (lambda (stream close-char)
-			      (declare (ignore stream close-char))
-			      (error ,(strcat (string name) " failure")))))
-       ;; Disable ordinary macro-chars
-       (let ((black-macro-chars (cdr (assoc :macro-chars blacklist)))
-	     (white-macro-chars (cdr (assoc :macro-chars whitelist))))
-	 (dolist (c black-macro-chars)
-	   (if (not (find c white-macro-chars :test #'char=))
-	       (set-macro-character c ,g!-errfun-name nil rt))))
+  (with-gensyms (g!-errfun-name g!-it)
+    `(let* ((rt (copy-readtable (find-readtable ,readtable)))
+	    (blacklist (let ((,g!-it ,blacklist))
+			 (if ,g!-it
+			     (expand-white-black-list ,g!-it)
+			     (analyze-readtable-chars rt))))
+	    (whitelist (expand-white-black-list ,whitelist)))
+       (let ((,g!-errfun-name (lambda (stream close-char)
+				(declare (ignore stream close-char))
+				(error ,(strcat (string name) " failure")))))
+	 ;; Disable ordinary macro-chars
+	 (let ((black-macro-chars (cdr (assoc :macro-chars blacklist)))
+	       (white-macro-chars (cdr (assoc :macro-chars whitelist))))
+	   (dolist (c black-macro-chars)
+	     (if (not (find c white-macro-chars :test #'char=))
+		 (set-macro-character c ,g!-errfun-name nil rt))))
 
-       ;; Disable dispatching macro-chars
-       (let ((black-dispatching-chars (cdr (assoc :dispatch-macro-chars blacklist)))
-	     (white-dispatching-chars (cdr (assoc :dispatch-macro-chars whitelist))))
-	 (iter (for (char . sub-chars) in black-dispatching-chars)
-	       (let ((wh-sub-chars (cdr (find char white-dispatching-chars :test #'char= :key #'car))))
-		 (iter (for sub-char in sub-chars)
-		       (if (not (find sub-char wh-sub-chars :test #'char=))
-			   (set-dispatch-macro-character char sub-char ,g!-errfun-name rt))))))
+	 ;; Disable dispatching macro-chars
+	 (let ((black-dispatching-chars (cdr (assoc :dispatch-macro-chars blacklist)))
+	       (white-dispatching-chars (cdr (assoc :dispatch-macro-chars whitelist))))
+	   (iter (for (char . sub-chars) in black-dispatching-chars)
+		 (let ((wh-sub-chars (cdr (find char white-dispatching-chars :test #'char= :key #'car))))
+		   (iter (for sub-char in sub-chars)
+			 (if (not (find sub-char wh-sub-chars :test #'char=))
+			     (set-dispatch-macro-character char sub-char ,g!-errfun-name rt))))))
 
-       ,@body)))
+	 ,@body))))
 
-(defmacro! secure-read-from-string-lambda (safe-name
+(defmacro secure-read-from-string-lambda (safe-name
                                            &key
                                            (readtable :standard)
                                            (blacklist 'safe-read-from-string-blacklist)
@@ -119,22 +121,23 @@ WHITELIST is a list of macrocharacters and dispatching macro-characters to allow
 		     (frob))))
 	     ,fail-value)))))
 
-(defmacro! define-secure-read-from-string (safe-name
+(defmacro define-secure-read-from-string (safe-name
                                            &key
                                            (readtable :standard)
                                            (blacklist 'safe-read-from-string-blacklist)
                                            (whitelist 'safe-read-from-string-whitelist)
-                                           fail-value)
-  `(let ((,g!-my-lambda (secure-read-from-string-lambda ,safe-name
-                                                        :readtable ,readtable
-                                                        :blacklist ,blacklist
-                                                        :whitelist ,whitelist
-                                                        :fail-value ,fail-value)))
-     (defun ,safe-name (string &optional (eof-error-p t) eof-value &key (start 0) end preserve-whitespace)
-       (funcall ,g!-my-lambda string eof-error-p eof-value
-                :start start :end end :preserve-whitespace preserve-whitespace))))
+					     fail-value)
+  (with-gensyms (g!-my-lambda)
+    `(let ((,g!-my-lambda (secure-read-from-string-lambda ,safe-name
+							  :readtable ,readtable
+							  :blacklist ,blacklist
+							  :whitelist ,whitelist
+							  :fail-value ,fail-value)))
+       (defun ,safe-name (string &optional (eof-error-p t) eof-value &key (start 0) end preserve-whitespace)
+	 (funcall ,g!-my-lambda string eof-error-p eof-value
+		  :start start :end end :preserve-whitespace preserve-whitespace)))))
 
-(defmacro! secure-read-lambda (safe-name
+(defmacro secure-read-lambda (safe-name
 			       &key
 			       (readtable :standard)
 			       (blacklist 'safe-read-from-string-blacklist)
@@ -164,18 +167,19 @@ WHITELIST is a list of macrocharacters and dispatching macro-characters to allow
 	       (with-standard-io-syntax
 		 (frob))))))))
 
-(defmacro! define-secure-read (safe-name
-                               &key
-                               (readtable :standard)
-                               (blacklist 'safe-read-from-string-blacklist)
-                               (whitelist 'safe-read-from-string-whitelist)
-                               preserving-whitespace
-                               fail-value)
-  `(let ((,g!-my-lambda (secure-read-lambda ,safe-name
-                                            :readtable ,readtable
-                                            :blacklist ,blacklist
-                                            :whitelist ,whitelist
-                                            :preserving-whitespace ,preserving-whitespace
-                                            :fail-value ,fail-value)))
-     (defun ,safe-name (&optional (stream *standard-input*) (eof-error-p t) eof-value recursive-p)
-       (funcall ,g!-my-lambda stream eof-error-p eof-value recursive-p))))
+(defmacro define-secure-read (safe-name
+			      &key
+				(readtable :standard)
+				(blacklist 'safe-read-from-string-blacklist)
+				(whitelist 'safe-read-from-string-whitelist)
+				preserving-whitespace
+				fail-value)
+  (with-gensyms (g!-my-lambda)
+    `(let ((,g!-my-lambda (secure-read-lambda ,safe-name
+					      :readtable ,readtable
+					      :blacklist ,blacklist
+					      :whitelist ,whitelist
+					      :preserving-whitespace ,preserving-whitespace
+					      :fail-value ,fail-value)))
+       (defun ,safe-name (&optional (stream *standard-input*) (eof-error-p t) eof-value recursive-p)
+	 (funcall ,g!-my-lambda stream eof-error-p eof-value recursive-p)))))

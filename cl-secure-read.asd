@@ -7,7 +7,7 @@
   :description "Secure lisp reader in spirit of Let over Lambda"
   :author "Alexander Popolitov <popolit@gmail.com>"
   :license "GPLv3"
-  :depends-on (#:defmacro-enhance #:rutils #:named-readtables #:iterate #:yaclanapht #:alexandria)
+  :depends-on (#:rutils #:named-readtables #:iterate #:alexandria)
   :components ((:file "package")
                (:file "cl-secure-read")))
 
