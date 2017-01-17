@@ -83,7 +83,7 @@ Black/white list may contain:
     * :allow-read-eval - do not bind *READ-EVAL* to NIL explicitly
     * :keep-io-syntax - do not wrap a call to READ-FROM-STRING into WITH-STANDARD-IO-SYNTAX
     * :lists - allow/deny `#\)` and `#\(`
-    * :quotes - allow/deny ``#\``` `#\'` and `#\,`
+    * :quotes - allow/deny ``#\` `` `#\'` and `#\,`
     * All other keywords are ignored.
    
 If BLACKLIST is NIL, all the macro-characters and dispatching macro-characters of the readtable
