@@ -78,12 +78,12 @@ Black/white list may contain:
   * characters, which are interpreted as macro-characters to deny/allow
   * lists of characters, which are interpreted as (macro-char ,@sub-macro-chars), where
     sub-macro-chars is a list of dispatch-macro-chars to deny/allow, which correspond to the given macro-char
-    (usually #\#)
+    (usually `#\#`)
   * special keywords, which for now are the following
     :allow-read-eval - do not bind *READ-EVAL* to NIL explicitly
     :keep-io-syntax - do not wrap a call to READ-FROM-STRING into WITH-STANDARD-IO-SYNTAX
-    :lists - allow/deny #\) and #\(
-    :quotes - allow/deny #\` #\' and #\,
+    :lists - allow/deny `#\)` and `#\(`
+    :quotes - allow/deny `#\`` `#\'` and `#\,`
     All other keywords are ignored.
    
 If BLACKLIST is NIL, all the macro-characters and dispatching macro-characters of the readtable
