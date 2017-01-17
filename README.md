@@ -39,7 +39,7 @@ Here are some notable parameters to macro, which control the behavior of resulti
      Note, that black/white-list may contain sublists and keywords. Meaning of these will be explained below.
 
      Default black/white-list pair forces standard-io-syntax, disabled read-eval and
-     disables all macro-characters except #\' #\, #\( and #\`
+     disables all macro-characters except `#\'` `#\,` `#\(` and `#\``
      (thus allowing only special syntax for construction of lists).
 
   *  SAFE-READ-FROM-STRING-WHITELIST and SAFE-READ-FROM-STRING-BLACKLIST variables can be used instead
