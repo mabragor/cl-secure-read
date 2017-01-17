@@ -39,7 +39,7 @@ Here are some notable parameters to macro, which control the behavior of resulti
      Note, that black/white-list may contain sublists and keywords. Meaning of these will be explained below.
 
      Default black/white-list pair forces standard-io-syntax, disabled read-eval and
-     disables all macro-characters except `#\'` `#\,` `#\(` and `#\``
+     disables all macro-characters except `#\'` `#\,` `#\(` and ``#\```
      (thus allowing only special syntax for construction of lists).
 
   *  SAFE-READ-FROM-STRING-WHITELIST and SAFE-READ-FROM-STRING-BLACKLIST variables can be used instead
@@ -83,7 +83,7 @@ Black/white list may contain:
     * :allow-read-eval - do not bind *READ-EVAL* to NIL explicitly
     * :keep-io-syntax - do not wrap a call to READ-FROM-STRING into WITH-STANDARD-IO-SYNTAX
     * :lists - allow/deny `#\)` and `#\(`
-    * :quotes - allow/deny `#\`` `#\'` and `#\,`
+    * :quotes - allow/deny ``#\``` `#\'` and `#\,`
     * All other keywords are ignored.
    
 If BLACKLIST is NIL, all the macro-characters and dispatching macro-characters of the readtable
