@@ -65,8 +65,8 @@ NAME is the name of a function, which is used in the error report."
 			  (expand-white-black-list ,e!-it)
 			  (analyze-readtable-chars rt)))
 	  (whitelist (expand-white-black-list ,whitelist)))
-     (let ((,g!-errfun-name (lambda (stream close-char)
-			      (declare (ignore stream close-char))
+     (let ((,g!-errfun-name (lambda (stream close-char &optional arg)
+			      (declare (ignore stream close-char arg))
 			      (error ,(strcat (string name) " failure")))))
        ;; Disable ordinary macro-chars
        (let ((black-macro-chars (cdr (assoc :macro-chars blacklist)))
