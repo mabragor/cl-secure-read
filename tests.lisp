@@ -52,10 +52,10 @@
   (mv-equal (funcall strict-lambda "#.(+ 1 2 3)") "caboom!")
   (mv-equal (funcall strict-lambda "; this is the comment") "caboom!")
   (mv-equal (funcall strict-lambda "#(1 2 3)") "caboom!"))
-  
 
-;; ;;; Here we test DEFINE-SECURE-READ  
-			
+
+;; ;;; Here we test DEFINE-SECURE-READ
+
 (define-secure-read strict-secure-read :fail-value "caboom!")
 
 (test stream-strict
@@ -75,7 +75,3 @@
             "caboom!")
   (mv-equal (less-strict-secure-read (make-string-input-stream "; this is the comment")) "caboom!")
   (mv-equal (vector-to-list (less-strict-secure-read (make-string-input-stream "#(1 2 3)"))) (1 2 3)))
-
-
-  
-			
